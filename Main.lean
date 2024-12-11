@@ -138,29 +138,16 @@ unsafe def diffEnvironments (module : Name) (act : Environment → Environment �
     Lean.withImportModules (after.importsOf module) {} 0 fun before =>
       act before after
 
-def accessorNames : Array String := #[
-    "toInt",
-    "toNat"
- ]
 
-def functionNames : Array String := #[
-  "signExtend",
-  "add",
-  "sub"
-]
+def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "urem", "sdiv",
+        "srem", "smod", "umod", "ofBool", "fill", "extract", "extractLsb\'",
+        "zeroExtend", "shiftLeftZeroExtend", "zeroExtend\"", "signExtend",
+        "and", "or", "xor", "not",  "shiftLeft", "ushiftRight", "sshiftRight",
+        "sshiftRight\"", "rotateLeft", "rotateRight", "append", "replicate",
+        "concat", "twoPow" ]
 
+def accessorNames := #["toNat", "toInt", "toFin", "getElem", "getLsbD", "getMsbD", "msb"]
 
-open Lean in
-/-- Draw the hashmap as a latex table. -/
-def renderLatexTable (t : HashMap (String × String) Bool) : String := Id.run do
-  let mut out := ""
-  let numRows := functionNames.size
-  out := out.append "\\begin{tabular}"
-  for fn in functionNames do
-    for acc in accessorNames do
-      pure ()
-  out := out.append "\\end{tabular}"
-  return out
 
 /--
 Pad a string to the right to ensure that it uses at least 'amt' space.
@@ -177,69 +164,26 @@ def padLeft (s : String) (amt : Nat) : String :=
   let padding := "".pushn ' ' (amt - s.length)
   padding ++ s
 
+open Lean in
+
+
 /-- Draw the hashmap as a latex table. -/
-def renderMarkdownTable (t : HashMap (String × String) Bool) : String := Id.run do
+def renderCSVTable (t : Std.HashSet (String × String) ) : String := Id.run do
   let mut out := ""
-
-  let accessorPad := accessorNames.foldl (init := 0) fun n acc => Nat.max n acc.length + 2
-  let fnPad := functionNames.foldl (init := 0) fun acc fn => Nat.max acc fn.length + 2
-  let pad := Nat.max fnPad accessorPad
-
-  for fn in #[""] ++ functionNames do
-    out := out.append "|"
-    out := out.append <| padRight fn pad
-
-  for acc in accessorNames do
-    out := out.append "\n"
-    out := out.append "|"
-    out := out.append <| padRight acc pad
-
-    for fn in functionNames do
-      if t.contains (acc, fn) then
-        out := out.append "|"
-        out := out.append <| padRight "\\tableok" pad
-      else
-        out := out.append "|"
-        out := out.append <| padRight "\\tableno" pad
+  for fn in functionNames do
+    for acc in accessorNames do
+      out := out ++ s!"{acc},{fn},{t.contains (acc, fn)}" ++ "\n"
   return out
 
-
-partial def _root_.String.containsSubstr? (needle : String) (haystack: String) : Bool :=
+/-- O(n^2) substring search, where we check if 'pat' occurs in 's'. -/
+partial def _root_.String.containsSubstr? (s pat : String) : Bool :=
   -- empty string is subtring of itself.
-  if haystack.length == 0 then needle.length == 0
+  if s.length == 0 then
+    pat.length == 0
   else
-    if haystack.isPrefixOf needle
+    if pat.isPrefixOf s
     then True
-    else containsSubstr? needle (haystack.drop 1)
-
--- Z-algorithm for string substring matching
--- Actually linear time, actually easy to implement! Unlike the weirder ones.
--- Competitive programming reference: https://cp-algorithms.com/string/z-function.html
--- Good algorithmic references: Algorithms on Strings, Sequences, and Trees [Good explanation]
--- Sexy algorithmic reference: Jewels of Stringology (Kawaii explanation, not very sensible on first read).
-def containsSubstr₂ (needle haystack : String) : Bool :=
-  Id.run do
-    let n := haystack.length
-    let mut z : Array Nat := Array.mkEmpty n
-    let mut pos : Nat := 0
-    let mut l : Nat := 0
-    let mut r : Nat := 0
-    for _ in [1:haystack.length] do
-      if pos < r then
-        z := z.push (min (r - pos) (z.get! (pos - l)))
-      let p1 : String.Pos := {byteIdx := z.get! pos}
-      let p2 : String.Pos := {byteIdx := pos + z.get! pos}
-      while (pos + z.get! pos < n && needle.get! p1 == haystack.get! p2) do
-          z := z.set! pos (z.get! pos + 1)
-
-      if (r < pos + z.get! pos) then
-        l := pos
-        r := pos + z.get! pos
-      pos := pos + 1
-    for zz in z do
-        if zz = needle.length then
-          return True
-    return False
+    else (s.drop 1).containsSubstr? pat
 
 open Lean in
 unsafe def replay (module : Name) : IO Unit := do
@@ -249,7 +193,7 @@ unsafe def replay (module : Name) : IO Unit := do
       -- We skip unsafe constants, and also partial constants. Later we may want to handle partial constants.
       fun ⟨n, ci⟩ => !before.constants.map₁.contains n && !ci.isUnsafe && !ci.isPartial
 
-    let mut table : HashMap (String × String) Bool := HashMap.empty
+    let mut table : Std.HashSet (String × String) := ∅
 
     for (constName, constInfo) in newConstants do
       -- do our filtering / tabulating / ...
@@ -258,13 +202,12 @@ unsafe def replay (module : Name) : IO Unit := do
         for acc in accessorNames do
           for fn in functionNames do
             let haveThm? := constName.toString.containsSubstr? acc && constName.toString.containsSubstr? fn
-            table := table.insert (acc, fn) haveThm?
-        IO.println s!"* {constName} is a theorem, with value '{info.value.hash}'"
+            if haveThm? then 
+              table := table.insert (acc, fn)
+              IO.println s!"* {constName} is a theorem, with value '{info.value.hash}'"
 
-    IO.FS.writeFile "table.tex" (renderLatexTable table)
-
-    IO.println "---"
-    IO.println (renderMarkdownTable table)
+    IO.FS.writeFile "theorem-table.csv" (renderCSVTable table)
+    IO.println (renderCSVTable table)
 
 /--
 Run as e.g. `lake exe lean4checker Mathlib.Data.Nat.Basic`.
