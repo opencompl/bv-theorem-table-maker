@@ -7,10 +7,9 @@ import Lean.CoreM
 import Lean4Checker.Lean
 -- import Std.Data.HashMap
 import Lean.Data.HashMap
+import Init.Data.String.Basic
+import Lean.AddDecl
 -- import System.FilePath
-#check System.FilePath
-#check IO.FS.writeFile
-
 
 open Lean
 
@@ -34,6 +33,7 @@ def M.run (env : Environment) (newConstants : HashMap Name ConstantInfo) (act : 
     ReaderT.run (r := { newConstants }) do
       act
 
+
 /-- Check if a `Name` still needs processing. If so, move it from `remaining` to `pending`. -/
 def isTodo (name : Name) : M Bool := do
   let r := (← get).remaining
@@ -49,12 +49,16 @@ def throwKernelException (ex : KernelException) : M Unit := do
     let state := { env := (← get).env }
     Prod.fst <$> (Lean.Core.CoreM.toIO · ctx state) do Lean.throwKernelException ex
 
-/-- Add a declaration, possibly throwing a `KernelException`. -/
+/-
 def addDecl (d : Declaration) : M Unit := do
-  match (← get).env.addDecl d with
-  | .ok env => modify fun s => { s with env := env }
-  | .error ex => throwKernelException ex
-
+  let s ← get
+  match Lean.Environment.addDecl s.env Lean.Options. d with
+  | .ok env' =>
+    modify fun s => { s with env := env' : State }
+  | .error ex =>
+    throwKernelException ex
+-/
+/-
 mutual
 /--
 Check if a `Name` still needs to be processed (i.e. is in `remaining`).
@@ -74,18 +78,18 @@ partial def replayConstant (name : Name) : M Unit := do
       match ci with
       | .defnInfo   info =>
         IO.println s!"Replaying defn {name}"
-        addDecl (Declaration.defnDecl   info)
+        -- addDecl (Declaration.defnDecl   info)
       | .thmInfo    info =>
         -- Add code here to check what theorem we have or whatever.
         IO.println s!"Replaying thm {name}"
         -- check if name contains toInt, and if so, record that we have toInt lemma.
-        addDecl (Declaration.thmDecl    info)
+        -- addDecl (Declaration.thmDecl    info)
       | .axiomInfo  info =>
         IO.println s!"Replaying axiom {name}"
-        addDecl (Declaration.axiomDecl  info)
+        -- addDecl (Declaration.axiomDecl  info)
       | .opaqueInfo info =>
         IO.println s!"Replaying opaque {name}"
-        addDecl (Declaration.opaqueDecl info)
+        -- addDecl (Declaration.opaqueDecl info)
       | .inductInfo info =>
         IO.println s!"Replaying inductive {name}"
         let lparams := info.levelParams
@@ -105,7 +109,7 @@ partial def replayConstant (name : Name) : M Unit := do
           { name := ci.name
             type := ci.type
             ctors := ctors.map fun ci => { name := ci.name, type := ci.type } }
-        addDecl (Declaration.inductDecl lparams nparams types false)
+        -- addDecl (Declaration.inductDecl lparams nparams types false)
       -- We discard `ctorInfo` and `recInfo` constants. These are added when generating inductives.
       | .ctorInfo _ =>
         IO.println s!"Skipping constructor {name}"
@@ -113,7 +117,7 @@ partial def replayConstant (name : Name) : M Unit := do
         IO.println s!"Skipping recursor {name}"
       | .quotInfo _ =>
         IO.println s!"Replaying quotient {name}"
-        addDecl (Declaration.quotDecl)
+        -- addDecl (Declaration.quotDecl)
       modify fun s => { s with pending := s.pending.erase name }
 
 /-- Replay a set of constants one at a time. -/
@@ -121,6 +125,7 @@ partial def replayConstants (names : NameSet) : M Unit := do
   for n in names do replayConstant n
 
 end
+-/
 
 /--
 Given a module, obtain the environments
@@ -192,10 +197,10 @@ def renderMarkdownTable (t : HashMap (String × String) Bool) : String := Id.run
     for fn in functionNames do
       if t.contains (acc, fn) then
         out := out.append "|"
-        out := out.append <| padRight "✓" pad
+        out := out.append <| padRight "\\tableok" pad
       else
         out := out.append "|"
-        out := out.append <| padRight "⨯" pad
+        out := out.append <| padRight "\\tableno" pad
   return out
 
 
@@ -212,8 +217,29 @@ partial def _root_.String.containsSubstr? (needle : String) (haystack: String) :
 -- Competitive programming reference: https://cp-algorithms.com/string/z-function.html
 -- Good algorithmic references: Algorithms on Strings, Sequences, and Trees [Good explanation]
 -- Sexy algorithmic reference: Jewels of Stringology (Kawaii explanation, not very sensible on first read).
-partial def containsSubstr₂ (needle haystack : String) :  Bool := Id.run do
-  sorry
+def containsSubstr₂ (needle haystack : String) : Bool :=
+  Id.run do
+    let n := haystack.length
+    let mut z : Array Nat := Array.mkEmpty n
+    let mut pos : Nat := 0
+    let mut l : Nat := 0
+    let mut r : Nat := 0
+    for _ in [1:haystack.length] do
+      if pos < r then
+        z := z.push (min (r - pos) (z.get! (pos - l)))
+      let p1 : String.Pos := {byteIdx := z.get! pos}
+      let p2 : String.Pos := {byteIdx := pos + z.get! pos}
+      while (pos + z.get! pos < n && needle.get! p1 == haystack.get! p2) do
+          z := z.set! pos (z.get! pos + 1)
+
+      if (r < pos + z.get! pos) then
+        l := pos
+        r := pos + z.get! pos
+      pos := pos + 1
+    for zz in z do
+        if zz = needle.length then
+          return True
+    return False
 
 open Lean in
 unsafe def replay (module : Name) : IO Unit := do

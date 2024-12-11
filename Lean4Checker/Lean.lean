@@ -15,10 +15,6 @@ namespace Lean
 
 namespace NameSet
 
-/-- The union of two `NameSet`s. -/
-def append (s t : NameSet) : NameSet :=
-  s.mergeBy (fun _ _ _ => .unit) t
-
 instance : Append NameSet where
   append := NameSet.append
 
@@ -44,10 +40,6 @@ def getUsedConstants (c : ConstantInfo) : NameSet :=
     | .inductInfo val => .ofList val.ctors
     | .opaqueInfo val => val.value.getUsedConstants'
     | _ => {}
-
-def inductiveVal! : ConstantInfo → InductiveVal
-  | .inductInfo val => val
-  | _ => panic! "Expected a `ConstantInfo.inductInfo`."
 
 end ConstantInfo
 
