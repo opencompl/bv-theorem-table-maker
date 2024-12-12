@@ -5,11 +5,9 @@ Authors: Scott Morrison
 -/
 import Lean.CoreM
 import Lean4Checker.Lean
--- import Std.Data.HashMap
 import Lean.Data.HashMap
 import Init.Data.String.Basic
 import Lean.AddDecl
--- import System.FilePath
 
 open Lean
 
@@ -33,100 +31,6 @@ def M.run (env : Environment) (newConstants : HashMap Name ConstantInfo) (act : 
     ReaderT.run (r := { newConstants }) do
       act
 
-
-/-- Check if a `Name` still needs processing. If so, move it from `remaining` to `pending`. -/
-def isTodo (name : Name) : M Bool := do
-  let r := (← get).remaining
-  if r.contains name then
-    modify fun s => { s with remaining := s.remaining.erase name, pending := s.pending.insert name }
-    return true
-  else
-    return false
-
-/-- Use the current `Environment` to throw a `KernelException`. -/
-def throwKernelException (ex : KernelException) : M Unit := do
-    let ctx := { fileName := "", options := ({} : KVMap), fileMap := default }
-    let state := { env := (← get).env }
-    Prod.fst <$> (Lean.Core.CoreM.toIO · ctx state) do Lean.throwKernelException ex
-
-/-
-def addDecl (d : Declaration) : M Unit := do
-  let s ← get
-  match Lean.Environment.addDecl s.env Lean.Options. d with
-  | .ok env' =>
-    modify fun s => { s with env := env' : State }
-  | .error ex =>
-    throwKernelException ex
--/
-/-
-mutual
-/--
-Check if a `Name` still needs to be processed (i.e. is in `remaining`).
-
-If so, recursively replay any constants it refers to,
-to ensure we add declarations in the right order.
-
-The construct the `Declaration` from its stored `ConstantInfo`,
-and add it to the environment.
--/
-partial def replayConstant (name : Name) : M Unit := do
-  if ← isTodo name then
-    let some ci := (← read).newConstants.find? name | unreachable!
-    replayConstants ci.getUsedConstants
-    -- Check that this name is still pending: a mutual block may have taken care of it.
-    if (← get).pending.contains name then
-      match ci with
-      | .defnInfo   info =>
-        IO.println s!"Replaying defn {name}"
-        -- addDecl (Declaration.defnDecl   info)
-      | .thmInfo    info =>
-        -- Add code here to check what theorem we have or whatever.
-        IO.println s!"Replaying thm {name}"
-        -- check if name contains toInt, and if so, record that we have toInt lemma.
-        -- addDecl (Declaration.thmDecl    info)
-      | .axiomInfo  info =>
-        IO.println s!"Replaying axiom {name}"
-        -- addDecl (Declaration.axiomDecl  info)
-      | .opaqueInfo info =>
-        IO.println s!"Replaying opaque {name}"
-        -- addDecl (Declaration.opaqueDecl info)
-      | .inductInfo info =>
-        IO.println s!"Replaying inductive {name}"
-        let lparams := info.levelParams
-        let nparams := info.numParams
-        let all ← info.all.mapM fun n => do pure <| ((← read).newConstants.find! n)
-        for o in all do
-          modify fun s =>
-            { s with remaining := s.remaining.erase o.name, pending := s.pending.erase o.name }
-        let ctorInfo ← all.mapM fun ci => do
-          pure (ci, ← ci.inductiveVal!.ctors.mapM fun n => do
-            pure ((← read).newConstants.find! n))
-        -- Make sure we are really finished with the constructors.
-        for (_, ctors) in ctorInfo do
-          for ctor in ctors do
-            replayConstants ctor.getUsedConstants
-        let types : List InductiveType := ctorInfo.map fun ⟨ci, ctors⟩ =>
-          { name := ci.name
-            type := ci.type
-            ctors := ctors.map fun ci => { name := ci.name, type := ci.type } }
-        -- addDecl (Declaration.inductDecl lparams nparams types false)
-      -- We discard `ctorInfo` and `recInfo` constants. These are added when generating inductives.
-      | .ctorInfo _ =>
-        IO.println s!"Skipping constructor {name}"
-      | .recInfo _ =>
-        IO.println s!"Skipping recursor {name}"
-      | .quotInfo _ =>
-        IO.println s!"Replaying quotient {name}"
-        -- addDecl (Declaration.quotDecl)
-      modify fun s => { s with pending := s.pending.erase name }
-
-/-- Replay a set of constants one at a time. -/
-partial def replayConstants (names : NameSet) : M Unit := do
-  for n in names do replayConstant n
-
-end
--/
-
 /--
 Given a module, obtain the environments
 * `before`, by importing all its imports but not processing the contents of the module
@@ -138,35 +42,16 @@ unsafe def diffEnvironments (module : Name) (act : Environment → Environment �
     Lean.withImportModules (after.importsOf module) {} 0 fun before =>
       act before after
 
-
 def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "urem", "sdiv",
         "srem", "smod", "umod", "ofBool", "fill", "extract", "extractLsb\'",
-        "zeroExtend", "shiftLeftZeroExtend", "zeroExtend\"", "signExtend",
+        "zeroExtend", "shiftLeftZeroExtend", "zeroExtend\'", "signExtend",
         "and", "or", "xor", "not",  "shiftLeft", "ushiftRight", "sshiftRight",
-        "sshiftRight\"", "rotateLeft", "rotateRight", "append", "replicate",
-        "concat", "twoPow" ]
+        "sshiftRight\'", "rotateLeft", "rotateRight", "append", "replicate",
+        "concat", "twoPow"]
 
 def accessorNames := #["toNat", "toInt", "toFin", "getElem", "getLsbD", "getMsbD", "msb"]
 
-
-/--
-Pad a string to the right to ensure that it uses at least 'amt' space.
-will not pad if length exceeds 'amt'.
--/
-def padRight (s : String) (amt : Nat) : String :=
-  String.pushn s ' ' (amt - s.length)
-
-/--
-Pad a string to the left to ensure that it uses at least 'amt' space.
-will not pad if length exceeds 'amt'.
--/
-def padLeft (s : String) (amt : Nat) : String :=
-  let padding := "".pushn ' ' (amt - s.length)
-  padding ++ s
-
 open Lean in
-
-
 /-- Draw the hashmap as a latex table. -/
 def renderCSVTable (t : Std.HashSet (String × String) ) : String := Id.run do
   let mut out := "accessor,function,doesExist\n"
@@ -196,7 +81,6 @@ unsafe def replay (module : Name) : IO Unit := do
     let mut table : Std.HashSet (String × String) := ∅
 
     for (constName, constInfo) in newConstants do
-      -- do our filtering / tabulating / ...
       IO.println "--"
       IO.println constName
       if let .thmInfo info := constInfo then
