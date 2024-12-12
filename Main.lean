@@ -169,7 +169,7 @@ open Lean in
 
 /-- Draw the hashmap as a latex table. -/
 def renderCSVTable (t : Std.HashSet (String × String) ) : String := Id.run do
-  let mut out := ""
+  let mut out := "accessor,function,doesExist\n"
   for fn in functionNames do
     for acc in accessorNames do
       out := out ++ s!"{acc},{fn},{t.contains (acc, fn)}" ++ "\n"
