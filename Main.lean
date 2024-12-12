@@ -52,14 +52,6 @@ def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv",
 def accessorNames := #["toNat", "toInt", "toFin", "getElem", "getLsbD", "getMsbD", "msb"]
 
 open Lean in
-/-- Draw the hashmap as a latex table. -/
-def renderCSVTable (t : Std.HashSet (String × String) ) : String := Id.run do
-  let mut out := "accessor,function,doesExist\n"
-  for fn in functionNames do
-    for acc in accessorNames do
-      out := out ++ s!"{acc},{fn},{t.contains (acc, fn)}" ++ "\n"
-  return out
-
 /-- O(n^2) substring search, where we check if 'pat' occurs in 's'. -/
 partial def _root_.String.containsSubstr? (s pat : String) : Bool :=
   -- empty string is subtring of itself.
@@ -70,16 +62,28 @@ partial def _root_.String.containsSubstr? (s pat : String) : Bool :=
     then True
     else (s.drop 1).containsSubstr? pat
 
+abbrev Table : Type := HashSet (String × String)
+def Table.toHashSet : Table → HashSet (String × String) := id
+
+/-- Draw the hashmap as a latex table. -/
+def renderCSVTable (t : Table) : String := Id.run do
+  let mut out := "accessor,function,doesExist\n"
+  for fn in functionNames do
+    for acc in accessorNames do
+      out := out ++ s!"{acc},{fn},{t.contains (acc, fn)}" ++ "\n"
+  return out
+
+
 open Lean in
-unsafe def replay (module : Name) : IO Unit := do
+unsafe def replay (module : Name) (table : Table) : IO Table := do
   diffEnvironments module fun before after => do
     -- please give me all the things that were added.
     let newConstants := after.constants.map₁.toList.filter
       -- We skip unsafe constants, and also partial constants. Later we may want to handle partial constants.
       fun ⟨n, ci⟩ => !before.constants.map₁.contains n && !ci.isUnsafe && !ci.isPartial
 
-    let mut table : Std.HashSet (String × String) := ∅
 
+    let mut table := table
     for (constName, constInfo) in newConstants do
       IO.println "--"
       IO.println constName
@@ -90,7 +94,9 @@ unsafe def replay (module : Name) : IO Unit := do
             if haveThm? then 
               table := table.insert (acc, fn)
               IO.println s!"* {constName} is a theorem, with value '{info.value.hash}'"
+    return table
 
+def Table.write (table : Table) : IO Unit := do
     IO.FS.writeFile "theorem-table.csv" (renderCSVTable table)
     IO.println (renderCSVTable table)
 
@@ -104,10 +110,12 @@ This is not an external verifier, simply a tool to detect "environment hacking".
 -/
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
-  let module ← match args with
-    | [mod] => match Syntax.decodeNameLit s!"`{mod}" with
-      | some m => pure m
-      | none => throw <| IO.userError s!"Could not resolve module: {mod}"
-    | _ => throw <| IO.userError "Usage: lake exe lean4checker Mathlib.Data.Nat.Basic"
-  replay module
+  if args.length = 0 then 
+    throw <| IO.userError "Usage: lake exe lean4checker Mathlib.Data.Nat.Basic"
+  let mut t : Table := ∅
+  for mod in args do 
+     let some module := Syntax.decodeNameLit s!"`{mod}" 
+        | throw <| IO.userError s!"Could not resolve module: {mod}"
+      t ← replay module t
+  t.write
   return 0
