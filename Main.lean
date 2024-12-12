@@ -197,6 +197,7 @@ unsafe def replay (module : Name) : IO Unit := do
 
     for (constName, constInfo) in newConstants do
       -- do our filtering / tabulating / ...
+      IO.println "--"
       IO.println constName
       if let .thmInfo info := constInfo then
         for acc in accessorNames do

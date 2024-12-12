@@ -1,3 +1,6 @@
+.lake
+.venv
+venv
 /build
 /lake-packages/*
 lakefile.olean
