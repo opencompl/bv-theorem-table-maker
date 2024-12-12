@@ -75,13 +75,14 @@ def generate_latex_table():
             exists_acc_fun.add((row['accessor'], row['function']))
 
     for acc in unique_accessors:
-        latex_table += acc[7:]
+        latex_table += acc
         for fun in unique_functions:
             does_exist = (acc, fun) in exists_acc_fun
             latex_table += " & " + ('\\tableok' if does_exist else '\\tableno')
         latex_table += " \\\\\n"
         latex_table += "\\hline\n"
 
+    latex_table += "\\end{tabular}"
     return latex_table
 
     # # Fill in the table rowsd
