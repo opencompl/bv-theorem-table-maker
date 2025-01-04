@@ -44,7 +44,7 @@ unsafe def diffEnvironments (module : Name) (act : Environment → Environment �
 
 def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "urem", "sdiv",
         "srem", "smod", "umod", "ofBool", "fill", "extract", "extractLsb\'",
-        "zeroExtend", "shiftLeftZeroExtend", "zeroExtend\'", "signExtend",
+        "setWidth", "shiftLeftZeroExtend", "setWidth\'", "signExtend",
         "and", "or", "xor", "not",  "shiftLeft", "ushiftRight", "sshiftRight",
         "sshiftRight\'", "rotateLeft", "rotateRight", "append", "replicate",
         "concat", "twoPow"]
@@ -91,7 +91,7 @@ unsafe def replay (module : Name) (table : Table) : IO Table := do
         for acc in accessorNames do
           for fn in functionNames do
             let haveThm? := constName.toString.containsSubstr? acc && constName.toString.containsSubstr? fn
-            if haveThm? then 
+            if haveThm? then
               table := table.insert (acc, fn)
               IO.println s!"* {constName} is a theorem, with value '{info.value.hash}'"
     return table
@@ -110,11 +110,11 @@ This is not an external verifier, simply a tool to detect "environment hacking".
 -/
 unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
-  if args.length = 0 then 
+  if args.length = 0 then
     throw <| IO.userError "Usage: lake exe lean4checker Mathlib.Data.Nat.Basic"
   let mut t : Table := ∅
-  for mod in args do 
-     let some module := Syntax.decodeNameLit s!"`{mod}" 
+  for mod in args do
+     let some module := Syntax.decodeNameLit s!"`{mod}"
         | throw <| IO.userError s!"Could not resolve module: {mod}"
       t ← replay module t
   t.write
