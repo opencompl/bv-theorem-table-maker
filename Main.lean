@@ -42,7 +42,7 @@ unsafe def diffEnvironments (module : Name) (act : Environment â†’ Environment â
     Lean.withImportModules (after.importsOf module) {} 0 fun before =>
       act before after
 
-def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "urem", "sdiv",
+def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "umod", "sdiv",
         "srem", "smod", "umod", "ofBool", "fill", "extract", "extractLsb\'",
         "setWidth", "shiftLeftZeroExtend", "setWidth\'", "signExtend",
         "and", "or", "xor", "not",  "shiftLeft", "ushiftRight", "sshiftRight",
