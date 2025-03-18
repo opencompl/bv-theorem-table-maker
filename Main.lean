@@ -5,7 +5,6 @@ Authors: Scott Morrison
 -/
 import Lean.CoreM
 import Lean4Checker.Lean
-import Lean.Data.HashMap
 import Init.Data.String.Basic
 import Lean.AddDecl
 
@@ -13,7 +12,7 @@ open Lean
 
 structure Context where
   -- new constants or whatever.
-  newConstants : HashMap Name ConstantInfo
+  newConstants : Std.HashMap Name ConstantInfo
 
 structure State where
   /-- A Lean environment, which has declarations, theorems, and stuff.-/
@@ -26,7 +25,7 @@ structure State where
 abbrev M := ReaderT Context <| StateT State IO
 
 -- function to run said monad.
-def M.run (env : Environment) (newConstants : HashMap Name ConstantInfo) (act : M α) : IO α :=
+def M.run (env : Environment) (newConstants : Std.HashMap Name ConstantInfo) (act : M α) : IO α :=
   StateT.run' (s := { env, remaining := newConstants.keyNameSet }) do
     ReaderT.run (r := { newConstants }) do
       act
@@ -62,8 +61,8 @@ partial def _root_.String.containsSubstr? (s pat : String) : Bool :=
     then True
     else (s.drop 1).containsSubstr? pat
 
-abbrev Table : Type := HashSet (String × String)
-def Table.toHashSet : Table → HashSet (String × String) := id
+abbrev Table : Type := Std.HashSet (String × String)
+def Table.toHashSet : Table → Std.HashSet (String × String) := id
 
 /-- Draw the hashmap as a latex table. -/
 def renderCSVTable (t : Table) : String := Id.run do

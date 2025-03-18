@@ -4,6 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Scott Morrison
 -/
 import Lean.Util.FoldConsts
+import Std.Data.HashMap
+import Lean.Environment
+
+open Lean
 
 /-!
 # Additional useful definitions in the `Lean` namespace.
@@ -23,7 +27,7 @@ def ofList (names : List Name) : NameSet :=
 
 end NameSet
 
-def HashMap.keyNameSet (m : HashMap Name α) : NameSet :=
+def Std.HashMap.keyNameSet (m : Std.HashMap Name α) : NameSet :=
   m.fold (fun s n _ => s.insert n) {}
 
 /-- Like `Expr.getUsedConstants`, but produce a `NameSet`. -/
@@ -45,7 +49,7 @@ end ConstantInfo
 
 namespace Environment
 
-def importsOf (env : Environment) (n : Name) : Array Import :=
+def importsOf (env : Lean.Environment) (n : Name) : Array Import :=
   if n = env.header.mainModule then
     env.header.imports
   else match env.getModuleIdx? n with
