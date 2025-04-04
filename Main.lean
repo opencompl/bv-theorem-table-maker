@@ -37,8 +37,8 @@ Given a module, obtain the environments
 and then run a function `act before after`.
 -/
 unsafe def diffEnvironments (module : Name) (act : Environment → Environment → IO α) : IO α := do
-  Lean.withImportModules #[{module}] {} 0 fun after => do
-    Lean.withImportModules (after.importsOf module) {} 0 fun before =>
+  Lean.withImportModules #[{module}] {} fun after => do
+    Lean.withImportModules (after.importsOf module) {} fun before =>
       act before after
 
 def functionNames : Array String := #["add", "sub", "neg", "abs", "mul", "udiv", "umod", "sdiv",
